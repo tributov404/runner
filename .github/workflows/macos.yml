@@ -1,0 +1,36 @@
+name: MacRDP
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    name: MacRDP
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Connect Runner To Tailscale
+      uses: tailscale/github-action@v4
+      with:
+        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+
+    - name: Show Runner Info
+      run: |
+        sw_vers
+        system_profiler SPHardwareDataType | head -n 20
+        whoami
+        hostname
+
+    - name: Enable Remote Access
+      run: |
+        chmod +x mac/start.sh
+        bash mac/start.sh
+
+    - name: Print VNC Details
+      run: |
+        chmod +x mac/login.sh
+        bash mac/login.sh
+
+    - name: Open tmate Session
+      uses: mxschmitt/action-tmate@v3.24
