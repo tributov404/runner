@@ -40,11 +40,11 @@ ANYDESK="$APP/Contents/MacOS/AnyDesk"
 sudo chmod +x "$ANYDESK"
 sudo xattr -rd com.apple.quarantine "$APP" 2>/dev/null || true
 
-# ФИКС 1: Корректная и чистая регистрация привилегированного хелпера
+# ФИКС 1: Безопасная регистрация хелпера. Оборачиваем в подоболочку, чтобы обойти set -e
 echo "=== Registering AnyDesk helper ==="
-sudo launchctl unload /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true
-sudo "$ANYDESK" --register-helper 2>/dev/null || true
-sudo launchctl load /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true
+(sudo launchctl unload /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true)
+(sudo "$ANYDESK" --register-helper 2>/dev/null || true)
+(sudo launchctl load /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true)
 
 echo "=== Killing previous AnyDesk ==="
 sudo pkill -9 -f AnyDesk 2>/dev/null || true
@@ -114,12 +114,12 @@ fi
 echo "AnyDesk ID: $ID"
 "$ANYDESK" --get-status || true
 
-# ФИКС 2: Вызов БЕЗ sudo (от имени USER), чтобы подключиться к активному local-service.
-# Благодаря правильному --register-helper выше, AnyDesk сам делегирует права хелперу.
-echo "=== Setting unattended access password ==="
+# ФИКС 2: Используем sudo, но перенаправляем поток через herestring (<<<), 
+# убирая echo и pipe, чтобы не ломать pipefail.
+echo "=== Setting unattended access password (sudo) ==="
 PASSWORD_SET=false
 for i in {1..8}; do
-    if echo "$PASSWORD" | "$ANYDESK" --set-password 2>/dev/null; then
+    if sudo "$ANYDESK" --set-password <<< "$PASSWORD" 2>/dev/null; then
         PASSWORD_SET=true
         echo "Unattended password configured."
         break
