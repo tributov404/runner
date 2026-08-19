@@ -1,6 +1,20 @@
 #!/bin/bash
 set -euo pipefail
 
+# === НАТИВНЫЙ SHIM ДЛЯ MAC (заменяет отсутствующую lsb_release) ===
+detect_os() {
+    if command -v sw_vers >/dev/null 2>&1; then
+        echo "macOS"
+    elif command -v lsb_release >/dev/null 2>&1; then
+        echo "Linux"
+    else
+        echo "unknown"
+        exit 1
+    fi
+}
+OS=$(detect_os)
+
+# === ПАРАМЕТРЫ ИЗМЕНЕНИЯ ===
 APP="/Applications/AnyDesk.app"
 DMG="$(pwd)/mac/AnyDesk.dmg"
 MOUNT="/Volumes/AnyDesk"
@@ -41,7 +55,7 @@ ANYDESK="$APP/Contents/MacOS/AnyDesk"
 sudo chmod +x "$ANYDESK"
 sudo xattr -rd com.apple.quarantine "$APP" 2>/dev/null || true
 
-# Регистрация хелпера
+# Регистрация хелпера (поддержка линуксовой утилиты lsb_release для загрузки/выгрузки)
 echo "=== Registering AnyDesk helper ==="
 sudo launchctl unload /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true
 sudo "$ANYDESK" --register-helper || true
