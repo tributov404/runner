@@ -14,12 +14,14 @@ if [ ! -f "$DMG" ]; then
     exit 1
 fi
 
+
 echo "=== Mounting AnyDesk DMG ==="
 
 hdiutil attach "$DMG" \
     -nobrowse \
     -readonly \
     -mountpoint "$MOUNT"
+
 
 echo "=== Installing AnyDesk ==="
 
@@ -29,35 +31,23 @@ if [ ! -d "$MOUNT/AnyDesk.app" ]; then
     exit 1
 fi
 
+
 sudo rm -rf "$APP"
 sudo cp -R "$MOUNT/AnyDesk.app" "$APP"
 
 hdiutil detach "$MOUNT" || true
 
+
 ANYDESK="$APP/Contents/MacOS/AnyDesk"
 
 sudo chmod +x "$ANYDESK"
 
+
 echo "=== Installing AnyDesk Service ==="
 
-PLIST="$APP/Contents/Library/LaunchDaemons/com.anydesk.anydesk.service.plist"
+# создаём сервис AnyDesk
+sudo "$ANYDESK" --install-service 2>&1 || true
 
-if [ -f "$PLIST" ]; then
-    sudo cp "$PLIST" /Library/LaunchDaemons/
-
-    sudo launchctl unload \
-        /Library/LaunchDaemons/com.anydesk.anydesk.service.plist \
-        2>/dev/null || true
-
-    sudo launchctl load -w \
-        /Library/LaunchDaemons/com.anydesk.anydesk.service.plist
-
-    echo "Service installed."
-else
-    echo "WARNING: Service plist not found"
-fi
-
-sleep 10
 
 echo "=== Starting AnyDesk ==="
 
@@ -65,19 +55,47 @@ open "$APP"
 
 sleep 20
 
-echo "=== Checking AnyDesk process ==="
+
+echo "=== Processes ==="
 
 pgrep -fl AnyDesk || true
+
 
 echo "=== Version ==="
 
 "$ANYDESK" --version || true
 
+
+echo "=== Restarting AnyDesk Service ==="
+
+sudo launchctl kickstart -k system/com.anydesk.anydesk.service 2>/dev/null || true
+
+sleep 15
+
+
+echo "=== Waiting for AnyDesk service ==="
+
+for i in {1..12}; do
+
+    STATUS="$("$ANYDESK" --get-status 2>/dev/null || true)"
+
+    echo "Status: $STATUS"
+
+    if [ -n "$STATUS" ]; then
+        break
+    fi
+
+    sleep 5
+
+done
+
+
 echo "=== Getting AnyDesk ID ==="
 
 ID=""
 
-for i in {1..10}; do
+for i in {1..15}; do
+
     ID="$("$ANYDESK" --get-id 2>/dev/null | tail -n 1 | tr -d '\r' || true)"
 
     if [ -n "$ID" ]; then
@@ -86,33 +104,42 @@ for i in {1..10}; do
 
     echo "Waiting for ID..."
     sleep 5
+
 done
+
 
 if [ -z "$ID" ]; then
     echo "ERROR: AnyDesk ID was not returned"
     exit 1
 fi
 
+
 echo "AnyDesk ID: $ID"
+
 
 echo "=== Setting unattended access ==="
 
-if ! echo "$PASSWORD" | sudo "$ANYDESK" --set-password; then
 
-    echo "Retrying after service restart..."
+for i in {1..5}; do
+
+    if echo "$PASSWORD" | sudo "$ANYDESK" --set-password; then
+        echo "Password configured"
+        break
+    fi
+
+    echo "Password setup failed, retry $i..."
 
     sudo launchctl kickstart -k system/com.anydesk.anydesk.service 2>/dev/null || true
 
     sleep 10
 
-    echo "$PASSWORD" | sudo "$ANYDESK" --set-password
-fi
+done
 
-echo "Unattended Access password configured."
 
-echo "=== Status ==="
+echo "=== Final Status ==="
 
 "$ANYDESK" --get-status || true
+
 
 echo "======================================"
 echo "ANYDESK ID: $ID"
