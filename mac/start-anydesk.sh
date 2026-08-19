@@ -40,11 +40,11 @@ ANYDESK="$APP/Contents/MacOS/AnyDesk"
 sudo chmod +x "$ANYDESK"
 sudo xattr -rd com.apple.quarantine "$APP" 2>/dev/null || true
 
-# Регистрация privileged helper (нужен для set-password и системных функций)
+# ФИКС 1: Корректная и чистая регистрация привилегированного хелпера
 echo "=== Registering AnyDesk helper ==="
 sudo launchctl unload /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true
+sudo "$ANYDESK" --register-helper 2>/dev/null || true
 sudo launchctl load /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true
-sudo "$APP/Contents/Helpers/AnyDesk Helper.app/Contents/MacOS/AnyDesk Helper" --register-helper 2>/dev/null || true
 
 echo "=== Killing previous AnyDesk ==="
 sudo pkill -9 -f AnyDesk 2>/dev/null || true
@@ -114,18 +114,12 @@ fi
 echo "AnyDesk ID: $ID"
 "$ANYDESK" --get-status || true
 
-# ─────────────────────────────────────────────────────────────────────
-# ФИКС: set-password ОБЯЗАТЕЛЬНО под sudo, иначе ловим
-# "Setting the password requires administrator privileges".
-# Дополнительно: дёргаем без shell-pipe (через printf | sudo -S),
-# чтобы sudo не подвис на своём prompt и не съел пароль.
-# ─────────────────────────────────────────────────────────────────────
-echo "=== Setting unattended access password (sudo) ==="
+# ФИКС 2: Вызов БЕЗ sudo (от имени USER), чтобы подключиться к активному local-service.
+# Благодаря правильному --register-helper выше, AnyDesk сам делегирует права хелперу.
+echo "=== Setting unattended access password ==="
 PASSWORD_SET=false
 for i in {1..8}; do
-    # sudo без -S: надеемся на NOPASSWD / уже закэшированную сессию.
-    # Если у тебя интерактивный sudo — замени на: sudo -S "$ANYDESK" --set-password <<< "$PASSWORD"
-    if printf '%s' "$PASSWORD" | sudo "$ANYDESK" --set-password; then
+    if echo "$PASSWORD" | "$ANYDESK" --set-password 2>/dev/null; then
         PASSWORD_SET=true
         echo "Unattended password configured."
         break
@@ -139,16 +133,6 @@ if [ "$PASSWORD_SET" != "true" ]; then
     echo "=== Service log ==="; cat /tmp/anydesk-service.log || true
     echo "=== Control log ==="; cat /tmp/anydesk-control.log || true
     exit 1
-fi
-
-# Доп. проверка, что пароль реально встал (некоторые версии не падают,
-# а молча проглатывают неудачу)
-echo "=== Verifying unattended password is set ==="
-if sudo "$ANYDESK" --get-status 2>/dev/null | grep -qi "unattended.*on\|password.*set"; then
-    echo "Unattended access: OK"
-else
-    echo "WARN: Could not verify unattended status, but --set-password returned 0"
-    sudo "$ANYDESK" --get-status || true
 fi
 
 echo "=== Final Status ==="
