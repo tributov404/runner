@@ -1,36 +1,66 @@
 name: MacRDP
+
 on:
   workflow_dispatch:
+
 jobs:
   build:
     name: MacRDP
     runs-on: macos-15-intel
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Connect Runner To Tailscale
-      uses: tailscale/github-action@v4
-      with:
-        authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+      - name: Show Runner Info
+        run: |
+          echo "=== macOS ==="
+          sw_vers
 
-    - name: Show Runner Info
-      run: |
-        sw_vers
-        system_profiler SPHardwareDataType | head -n 20
-        whoami
-        hostname
+          echo "=== Hardware ==="
+          system_profiler SPHardwareDataType | head -n 25
 
-    - name: Enable Remote Access
-      run: |
-        chmod +x mac/start.sh
-        bash mac/start.sh
+          echo "=== User ==="
+          whoami
 
-    - name: Print VNC Details
-      run: |
-        chmod +x mac/login.sh
-        bash mac/login.sh
+          echo "=== Hostname ==="
+          hostname
 
-    - name: Open tmate Session
-      uses: mxschmitt/action-tmate@v3.24
+          echo "=== Display ==="
+          system_profiler SPDisplaysDataType | head -n 40
+
+      - name: Start AnyDesk
+        env:
+          ANYDESK_PASSWORD: ${{ secrets.ANYDESK_PASSWORD }}
+        run: |
+          chmod +x mac/start-anydesk.sh
+          bash mac/start-anydesk.sh
+
+      - name: Show AnyDesk Details
+        run: |
+          ANYDESK="/Applications/AnyDesk.app/Contents/MacOS/AnyDesk"
+
+          echo "======================================"
+          echo "          ANYDESK CONNECTION"
+          echo "======================================"
+
+          echo "AnyDesk ID:"
+          "$ANYDESK" --get-id || true
+
+          echo
+          echo "Status:"
+          "$ANYDESK" --get-status || true
+
+          echo
+          echo "Keep this workflow running."
+          echo "======================================"
+
+      - name: Keep Runner Alive
+        run: |
+          echo "AnyDesk is running."
+          echo "Waiting for remote connection..."
+
+          while true; do
+            echo "[$(date)] Runner alive"
+            sleep 60
+          done
