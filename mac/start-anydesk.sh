@@ -8,7 +8,7 @@ MOUNT="/Volumes/AnyDesk"
 PASSWORD="${ANYDESK_PASSWORD:?ANYDESK_PASSWORD is not set}"
 
 cleanup() {
-    hdiutil detach "$MOUNT" 2>/dev/null || true
+    hdiutil detach "$MOUNT" 2>/dev/null true
 }
 trap cleanup EXIT
 
@@ -19,7 +19,7 @@ if [ ! -f "$DMG" ]; then
 fi
 
 echo "=== Preparing mount ==="
-hdiutil detach "$MOUNT" 2>/dev/null || true
+hdiutil detach "$MOUNT" 2>/dev/null true
 
 echo "=== Mounting AnyDesk DMG ==="
 hdiutil attach "$DMG" \
@@ -38,16 +38,16 @@ sudo cp -R "$MOUNT/AnyDesk.app" "$APP"
 
 ANYDESK="$APP/Contents/MacOS/AnyDesk"
 sudo chmod +x "$ANYDESK"
-sudo xattr -rd com.apple.quarantine "$APP" 2>/dev/null || true
+sudo xattr -rd com.apple.quarantine "$APP" 2>/dev/null true
 
 # ФИКС 1: Безопасная регистрация хелпера. Оборачиваем в подоболочку, чтобы обойти set -e
 echo "=== Registering AnyDesk helper ==="
-(sudo launchctl unload /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true)
-(sudo "$ANYDESK" --register-helper 2>/dev/null || true)
-(sudo launchctl load /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null || true)
+(sudo launchctl unload /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null true)
+(sudo "$ANYDESK" --register-helper 2>/dev/null true)
+(sudo launchctl load /Library/LaunchDaemons/com.philandro.anydesk.Helper.plist 2>/dev/null true)
 
 echo "=== Killing previous AnyDesk ==="
-sudo pkill -9 -f AnyDesk 2>/dev/null || true
+sudo pkill -9 -f AnyDesk 2>/dev/null true
 sleep 3
 
 echo "=== Starting AnyDesk Local Service (as USER, not root) ==="
@@ -60,20 +60,20 @@ echo "Service PID: $SERVICE_PID"
 echo "=== Waiting for service to be ready ==="
 SERVICE_READY=false
 for i in {1..40}; do
-    STATUS="$("$ANYDESK" --get-status 2>/dev/null || true)"
+    STATUS="$("$ANYDESK" --get-status 2>/dev/null true)"
     if echo "$STATUS" | grep -qi "connected\|online\|ready"; then
         echo "Service is up! ($STATUS)"
         SERVICE_READY=true
         break
     fi
-    echo "  ...waiting ($i) status=$STATUS"
+    echo " ...waiting ($i) status=$STATUS"
     sleep 2
 done
 
 if [ "$SERVICE_READY" != "true" ]; then
     echo "ERROR: AnyDesk service did not start in time"
     echo "=== Service log ==="
-    cat /tmp/anydesk-service.log || true
+    cat /tmp/anydesk-service.log
     exit 1
 fi
 
@@ -88,33 +88,35 @@ open "$APP"
 sleep 8
 
 echo "=== AnyDesk processes ==="
-pgrep -fl AnyDesk || true
+pgrep -fl AnyDesk
 
 echo "=== Version ==="
-"$ANYDESK" --version || true
+"$ANYDESK" --version
 
 echo "=== Getting AnyDesk ID ==="
 ID=""
 for i in {1..30}; do
-    ID="$("$ANYDESK" --get-id 2>/dev/null | tail -n 1 | tr -d '\r' || true)"
+    ID="$("$ANYDESK" --get-id 2>/dev/null | tail -n 1 | tr -d '\r')"
     if [ -n "$ID" ] && [ "$ID" != "SERVICE_NOT_RUNNING" ]; then
         break
     fi
-    echo "  Waiting for ID... ($i)"
+    echo " Waiting for ID... ($i)"
     sleep 3
 done
 
 if [ -z "$ID" ] || [ "$ID" = "SERVICE_NOT_RUNNING" ]; then
     echo "ERROR: AnyDesk ID not returned"
-    echo "=== Service log ==="; cat /tmp/anydesk-service.log || true
-    echo "=== Control log ==="; cat /tmp/anydesk-control.log || true
+    echo "=== Service log ==="
+    cat /tmp/anydesk-service.log
+    echo "=== Control log ==="
+    cat /tmp/anydesk-control.log
     exit 1
 fi
 
 echo "AnyDesk ID: $ID"
-"$ANYDESK" --get-status || true
+"$ANYDESK" --get-status
 
-# ФИКС 2: Используем sudo, но перенаправляем поток через herestring (<<<), 
+# ФИКС 2: Используем sudo, но перенаправляем поток через herestring (<<<),
 # убирая echo и pipe, чтобы не ломать pipefail.
 echo "=== Setting unattended access password (sudo) ==="
 PASSWORD_SET=false
@@ -130,8 +132,10 @@ done
 
 if [ "$PASSWORD_SET" != "true" ]; then
     echo "ERROR: Could not configure unattended access"
-    echo "=== Service log ==="; cat /tmp/anydesk-service.log || true
-    echo "=== Control log ==="; cat /tmp/anydesk-control.log || true
+    echo "=== Service log ==="
+    cat /tmp/anydesk-service.log
+    echo "=== Control log ==="
+    cat /tmp/anydesk-control.log
     exit 1
 fi
 
