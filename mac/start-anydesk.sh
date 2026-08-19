@@ -1,69 +1,80 @@
-```bash
 #!/bin/bash
 set -euo pipefail
 
-ANYDESK_VERSION="9.7.3"
+APP="/Applications/AnyDesk.app"
 DMG="/tmp/AnyDesk.dmg"
 MOUNT="/Volumes/AnyDesk"
-APP="/Applications/AnyDesk.app"
-PASSWORD="${ANYDESK_PASSWORD:-runnerrdp}"
+PASSWORD="${ANYDESK_PASSWORD:?ANYDESK_PASSWORD is not set}"
 
-echo "=== Installing AnyDesk ==="
+echo "=== Downloading AnyDesk ==="
 
-# Download official AnyDesk macOS Intel build
-curl -L --fail --silent --show-error \
-  "https://download.anydesk.com/macos/AnyDesk.dmg" \
+curl -fL \
+  "https://download.anydesk.com/AnyDesk.dmg" \
   -o "$DMG"
 
-# Mount installer
+echo "=== Mounting AnyDesk ==="
+
 hdiutil attach "$DMG" \
   -nobrowse \
   -readonly \
   -mountpoint "$MOUNT"
 
-# Install application
-if [ -d "$MOUNT/AnyDesk.app" ]; then
-    sudo rm -rf "$APP"
-    sudo cp -R "$MOUNT/AnyDesk.app" "$APP"
-else
-    echo "AnyDesk.app not found in DMG"
-    hdiutil detach "$MOUNT" || true
-    exit 1
+echo "=== Installing AnyDesk ==="
+
+if [ ! -d "$MOUNT/AnyDesk.app" ]; then
+  echo "ERROR: AnyDesk.app was not found in the downloaded DMG."
+  hdiutil detach "$MOUNT" || true
+  exit 1
 fi
 
-# Unmount
-hdiutil detach "$MOUNT"
+sudo rm -rf "$APP"
+sudo cp -R "$MOUNT/AnyDesk.app" "$APP"
 
-chmod +x "$APP/Contents/MacOS/AnyDesk"
+hdiutil detach "$MOUNT" || true
+rm -f "$DMG"
 
 echo "=== Starting AnyDesk ==="
 
-open -a "$APP"
+sudo open -a "$APP"
 
-sleep 8
+sleep 10
+
+ANYDESK="$APP/Contents/MacOS/AnyDesk"
+
+if [ ! -x "$ANYDESK" ]; then
+  echo "ERROR: AnyDesk executable not found."
+  exit 1
+fi
 
 echo "=== AnyDesk Version ==="
-"$APP/Contents/MacOS/AnyDesk" --version || true
+"$ANYDESK" --version || true
 
 echo "=== AnyDesk ID ==="
-ANYDESK_ID=$("$APP/Contents/MacOS/AnyDesk" --get-id | tail -n 1)
+
+ANYDESK_ID="$("$ANYDESK" --get-id 2>/dev/null | tr -d '\r' | tail -n 1)"
+
+if [ -z "$ANYDESK_ID" ]; then
+  echo "ERROR: Could not obtain AnyDesk ID."
+  exit 1
+fi
 
 echo "AnyDesk ID: $ANYDESK_ID"
 
-echo "=== Configure Unattended Access ==="
+echo "=== Setting Unattended Access Password ==="
 
-printf '%s\n' "$PASSWORD" | \
-  sudo "$APP/Contents/MacOS/AnyDesk" --set-password
+printf '%s\n' "$PASSWORD" | sudo "$ANYDESK" --set-password
 
 echo "Unattended Access password configured."
 
 echo "=== AnyDesk Status ==="
-"$APP/Contents/MacOS/AnyDesk" --get-status || true
 
-echo "=========================================="
-echo "ANYDESK ID: $ANYDESK_ID"
-echo "ANYDESK PASSWORD: $PASSWORD"
-echo "=========================================="
+"$ANYDESK" --get-status || true
 
-echo "Keep this GitHub Actions job running."
-```
+echo "========================================"
+echo "           ANYDESK CONNECTION"
+echo "========================================"
+echo "AnyDesk ID: $ANYDESK_ID"
+echo "Password: configured through GitHub Secret"
+echo "========================================"
+
+echo "AnyDesk is running."
