@@ -36,19 +36,34 @@ hdiutil detach "$MOUNT" || true
 
 ANYDESK="$APP/Contents/MacOS/AnyDesk"
 
-chmod +x "$ANYDESK"
+sudo chmod +x "$ANYDESK"
 
 echo "=== Installing AnyDesk Service ==="
 
-sudo "$ANYDESK" --install-service || true
+PLIST="$APP/Contents/Library/LaunchDaemons/com.anydesk.anydesk.service.plist"
 
-sleep 5
+if [ -f "$PLIST" ]; then
+    sudo cp "$PLIST" /Library/LaunchDaemons/
+
+    sudo launchctl unload \
+        /Library/LaunchDaemons/com.anydesk.anydesk.service.plist \
+        2>/dev/null || true
+
+    sudo launchctl load -w \
+        /Library/LaunchDaemons/com.anydesk.anydesk.service.plist
+
+    echo "Service installed."
+else
+    echo "WARNING: Service plist not found"
+fi
+
+sleep 10
 
 echo "=== Starting AnyDesk ==="
 
-open -a "$APP"
+open "$APP"
 
-sleep 15
+sleep 20
 
 echo "=== Checking AnyDesk process ==="
 
@@ -82,15 +97,16 @@ echo "AnyDesk ID: $ID"
 
 echo "=== Setting unattended access ==="
 
-echo "$PASSWORD" | sudo "$ANYDESK" --set-password || {
-    echo "Retrying after restarting service..."
+if ! echo "$PASSWORD" | sudo "$ANYDESK" --set-password; then
 
-    sudo launchctl kickstart -k system/com.anydesk.anydesk.service || true
+    echo "Retrying after service restart..."
+
+    sudo launchctl kickstart -k system/com.anydesk.anydesk.service 2>/dev/null || true
 
     sleep 10
 
     echo "$PASSWORD" | sudo "$ANYDESK" --set-password
-}
+fi
 
 echo "Unattended Access password configured."
 
