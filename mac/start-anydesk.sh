@@ -38,18 +38,40 @@ ANYDESK="$APP/Contents/MacOS/AnyDesk"
 
 chmod +x "$ANYDESK"
 
+echo "=== Installing AnyDesk Service ==="
+
+sudo "$ANYDESK" --install-service || true
+
+sleep 5
+
 echo "=== Starting AnyDesk ==="
 
 open -a "$APP"
 
-sleep 10
+sleep 15
+
+echo "=== Checking AnyDesk process ==="
+
+pgrep -fl AnyDesk || true
 
 echo "=== Version ==="
+
 "$ANYDESK" --version || true
 
-echo "=== AnyDesk ID ==="
+echo "=== Getting AnyDesk ID ==="
 
-ID="$("$ANYDESK" --get-id 2>/dev/null | tail -n 1 | tr -d '\r')"
+ID=""
+
+for i in {1..10}; do
+    ID="$("$ANYDESK" --get-id 2>/dev/null | tail -n 1 | tr -d '\r' || true)"
+
+    if [ -n "$ID" ]; then
+        break
+    fi
+
+    echo "Waiting for ID..."
+    sleep 5
+done
 
 if [ -z "$ID" ]; then
     echo "ERROR: AnyDesk ID was not returned"
@@ -60,8 +82,15 @@ echo "AnyDesk ID: $ID"
 
 echo "=== Setting unattended access ==="
 
-printf '%s\n' "$PASSWORD" | \
-    sudo "$ANYDESK" --set-password
+echo "$PASSWORD" | sudo "$ANYDESK" --set-password || {
+    echo "Retrying after restarting service..."
+
+    sudo launchctl kickstart -k system/com.anydesk.anydesk.service || true
+
+    sleep 10
+
+    echo "$PASSWORD" | sudo "$ANYDESK" --set-password
+}
 
 echo "Unattended Access password configured."
 
