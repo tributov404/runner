@@ -2,79 +2,73 @@
 set -euo pipefail
 
 APP="/Applications/AnyDesk.app"
-DMG="/tmp/AnyDesk.dmg"
+DMG="$(pwd)/mac/AnyDesk.dmg"
 MOUNT="/Volumes/AnyDesk"
+
 PASSWORD="${ANYDESK_PASSWORD:?ANYDESK_PASSWORD is not set}"
 
-echo "=== Downloading AnyDesk ==="
+echo "=== Checking AnyDesk installer ==="
 
-curl -fL \
-  "https://download.anydesk.com/AnyDesk.dmg" \
-  -o "$DMG"
+if [ ! -f "$DMG" ]; then
+    echo "ERROR: $DMG not found"
+    exit 1
+fi
 
-echo "=== Mounting AnyDesk ==="
+echo "=== Mounting AnyDesk DMG ==="
 
 hdiutil attach "$DMG" \
-  -nobrowse \
-  -readonly \
-  -mountpoint "$MOUNT"
+    -nobrowse \
+    -readonly \
+    -mountpoint "$MOUNT"
 
 echo "=== Installing AnyDesk ==="
 
 if [ ! -d "$MOUNT/AnyDesk.app" ]; then
-  echo "ERROR: AnyDesk.app was not found in the downloaded DMG."
-  hdiutil detach "$MOUNT" || true
-  exit 1
+    echo "ERROR: AnyDesk.app not found inside DMG"
+    hdiutil detach "$MOUNT" || true
+    exit 1
 fi
 
 sudo rm -rf "$APP"
 sudo cp -R "$MOUNT/AnyDesk.app" "$APP"
 
 hdiutil detach "$MOUNT" || true
-rm -f "$DMG"
-
-echo "=== Starting AnyDesk ==="
-
-sudo open -a "$APP"
-
-sleep 10
 
 ANYDESK="$APP/Contents/MacOS/AnyDesk"
 
-if [ ! -x "$ANYDESK" ]; then
-  echo "ERROR: AnyDesk executable not found."
-  exit 1
-fi
+chmod +x "$ANYDESK"
 
-echo "=== AnyDesk Version ==="
+echo "=== Starting AnyDesk ==="
+
+open -a "$APP"
+
+sleep 10
+
+echo "=== Version ==="
 "$ANYDESK" --version || true
 
 echo "=== AnyDesk ID ==="
 
-ANYDESK_ID="$("$ANYDESK" --get-id 2>/dev/null | tr -d '\r' | tail -n 1)"
+ID="$("$ANYDESK" --get-id 2>/dev/null | tail -n 1 | tr -d '\r')"
 
-if [ -z "$ANYDESK_ID" ]; then
-  echo "ERROR: Could not obtain AnyDesk ID."
-  exit 1
+if [ -z "$ID" ]; then
+    echo "ERROR: AnyDesk ID was not returned"
+    exit 1
 fi
 
-echo "AnyDesk ID: $ANYDESK_ID"
+echo "AnyDesk ID: $ID"
 
-echo "=== Setting Unattended Access Password ==="
+echo "=== Setting unattended access ==="
 
-printf '%s\n' "$PASSWORD" | sudo "$ANYDESK" --set-password
+printf '%s\n' "$PASSWORD" | \
+    sudo "$ANYDESK" --set-password
 
 echo "Unattended Access password configured."
 
-echo "=== AnyDesk Status ==="
+echo "=== Status ==="
 
 "$ANYDESK" --get-status || true
 
-echo "========================================"
-echo "           ANYDESK CONNECTION"
-echo "========================================"
-echo "AnyDesk ID: $ANYDESK_ID"
-echo "Password: configured through GitHub Secret"
-echo "========================================"
-
-echo "AnyDesk is running."
+echo "======================================"
+echo "ANYDESK ID: $ID"
+echo "======================================"
