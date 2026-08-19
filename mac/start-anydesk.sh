@@ -114,10 +114,18 @@ fi
 echo "AnyDesk ID: $ID"
 "$ANYDESK" --get-status || true
 
-echo "=== Setting unattended access password ==="
+# ─────────────────────────────────────────────────────────────────────
+# ФИКС: set-password ОБЯЗАТЕЛЬНО под sudo, иначе ловим
+# "Setting the password requires administrator privileges".
+# Дополнительно: дёргаем без shell-pipe (через printf | sudo -S),
+# чтобы sudo не подвис на своём prompt и не съел пароль.
+# ─────────────────────────────────────────────────────────────────────
+echo "=== Setting unattended access password (sudo) ==="
 PASSWORD_SET=false
 for i in {1..8}; do
-    if echo "$PASSWORD" | "$ANYDESK" --set-password; then
+    # sudo без -S: надеемся на NOPASSWD / уже закэшированную сессию.
+    # Если у тебя интерактивный sudo — замени на: sudo -S "$ANYDESK" --set-password <<< "$PASSWORD"
+    if printf '%s' "$PASSWORD" | sudo "$ANYDESK" --set-password; then
         PASSWORD_SET=true
         echo "Unattended password configured."
         break
@@ -131,6 +139,16 @@ if [ "$PASSWORD_SET" != "true" ]; then
     echo "=== Service log ==="; cat /tmp/anydesk-service.log || true
     echo "=== Control log ==="; cat /tmp/anydesk-control.log || true
     exit 1
+fi
+
+# Доп. проверка, что пароль реально встал (некоторые версии не падают,
+# а молча проглатывают неудачу)
+echo "=== Verifying unattended password is set ==="
+if sudo "$ANYDESK" --get-status 2>/dev/null | grep -qi "unattended.*on\|password.*set"; then
+    echo "Unattended access: OK"
+else
+    echo "WARN: Could not verify unattended status, but --set-password returned 0"
+    sudo "$ANYDESK" --get-status || true
 fi
 
 echo "=== Final Status ==="
