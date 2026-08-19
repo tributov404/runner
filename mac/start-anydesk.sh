@@ -54,11 +54,24 @@ sudo chmod +x "$ANYDESK"
 
 echo "=== Starting AnyDesk Local Service ==="
 
-sudo nohup "$ANYDESK" --local-service \
+sudo pkill -f "AnyDesk --local-service" 2>/dev/null || true
+
+sudo "$ANYDESK" --local-service \
     >/tmp/anydesk-service.log 2>&1 &
 
 
-sleep 15
+sleep 20
+
+
+echo "=== Starting AnyDesk Control ==="
+
+sudo pkill -f "AnyDesk --control" 2>/dev/null || true
+
+sudo "$ANYDESK" --control \
+    >/tmp/anydesk-control.log 2>&1 &
+
+
+sleep 20
 
 
 echo "=== Starting AnyDesk GUI ==="
@@ -98,8 +111,13 @@ done
 
 if [ -z "$ID" ]; then
     echo "ERROR: AnyDesk ID was not returned"
-    echo "=== Service Log ==="
+
+    echo "=== Service log ==="
     cat /tmp/anydesk-service.log || true
+
+    echo "=== Control log ==="
+    cat /tmp/anydesk-control.log || true
+
     exit 1
 fi
 
@@ -107,23 +125,47 @@ fi
 echo "AnyDesk ID: $ID"
 
 
+echo "=== Checking status ==="
+
+"$ANYDESK" --get-status || true
+
+
 echo "=== Setting unattended access ==="
 
-for i in {1..5}; do
+
+PASSWORD_SET=false
+
+for i in {1..8}; do
 
     if echo "$PASSWORD" | sudo "$ANYDESK" --set-password; then
+        PASSWORD_SET=true
         echo "Unattended Access password configured."
         break
     fi
 
     echo "Password setup failed, retry $i..."
 
-    sleep 10
+    sleep 15
 
 done
 
 
-echo "=== Status ==="
+if [ "$PASSWORD_SET" != true ]; then
+
+    echo "ERROR: Could not configure unattended access"
+
+    echo "=== Service log ==="
+    cat /tmp/anydesk-service.log || true
+
+    echo "=== Control log ==="
+    cat /tmp/anydesk-control.log || true
+
+    exit 1
+
+fi
+
+
+echo "=== Final Status ==="
 
 "$ANYDESK" --get-status || true
 
